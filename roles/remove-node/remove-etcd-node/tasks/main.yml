@@ -62,7 +62,7 @@
 # Fetch kubeconfig for updating kubeadm-config configmap
 - name: Fetch kubeconfig file
   copy:
-    src: /root/.kubeconfig
+    src: "{{ ansible_env.HOME | default('/root') }}/.kube/config"
     dest: /tmp/.kubeconfig
   delegate_to: "{{ groups['kube_control_plane'] | first }}"
 
