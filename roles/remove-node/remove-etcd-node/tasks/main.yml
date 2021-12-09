@@ -43,6 +43,11 @@
 
 - name: Remove etcd member from cluster
   command: "{{ bin_dir }}/etcdctl member remove {{ etcd_member_id.stdout }}"
+  register: etcd_member_in_cluster
+  changed_when: false
+  check_mode: no
+  tags:
+    - facts
   environment:
     ETCDCTL_API: 3
     ETCDCTL_CERT: "{{ kube_cert_dir + '/etcd/server.crt' if etcd_deployment_type == 'kubeadm' else etcd_cert_dir + '/admin-' + groups['etcd']|first + '.pem' }}"
@@ -54,12 +59,25 @@
     - inventory_hostname in groups['etcd']
     - etcd_member_id.stdout | length > 0
 
+# Fetch kubeconfig for updating kubeadm-config configmap
+- name: Fetch kubeconfig file
+  copy:
+    src: /root/.kubeconfig
+    dest: /tmp/.kubeconfig
+  delegate_to: "{{ groups['kube_control_plane'] | first }}"
+
+- name: Update kubeconfig file
+  replace:
+    regexp: "://127.0.0.1:"
+    replace: "://{{ hostvars[groups['kube_control_plane']|first]['ip'] | default(hostvars[groups['kube_control_plane']|first]['ansible_default_ipv4']['address']) }}:"
+    path: /tmp/.kubeconfig
+
 # Delete node from kubeadm-config
 - name: Update kubeadm-config configmap removing control-plane no longer existing endpoints
   vars:
     kubeadm_config_cm_content: "{{ lookup('kubernetes.core.k8s', kind='ConfigMap', namespace='kube-system', resource_name='kubeadm-config', kubeconfig=keos_kubeconfig_path) }}"
   kubernetes.core.k8s:
-    kubeconfig: "{{ keos_kubeconfig_path }}"
+    kubeconfig: /tmp/.kubeconfig
     definition:
       api_version: v1
       kind: ConfigMap
@@ -68,3 +86,8 @@
         namespace: default
       data:
         ClusterStatus: "{{ kubeadm_config_cm_content.data.ClusterStatus | regex_replace( node |default(kube_node)  + ':\n' + ' *advertiseAddress: ([0-9]{1,3}.){3}[0-9]{1,3}\n' + ' *bindPort: [0-9]{1,5}' , '') }}"
+
+- name: Clean fetched kubeconfig-file
+  file:
+    state: absent
+    path: /tmp/.kubeconfig
