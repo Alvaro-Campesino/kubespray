@@ -75,7 +75,7 @@
 # Delete node from kubeadm-config
 - name: Update kubeadm-config configmap removing control-plane no longer existing endpoints
   vars:
-    kubeadm_config_cm_content: "{{ lookup('kubernetes.core.k8s', kind='ConfigMap', namespace='kube-system', resource_name='kubeadm-config', kubeconfig=keos_kubeconfig_path) }}"
+    kubeadm_config_cm_content: "{{ lookup('kubernetes.core.k8s', kind='ConfigMap', namespace='kube-system', resource_name='kubeadm-config', kubeconfig=/tmp/.kubeconfig) }}"
   kubernetes.core.k8s:
     kubeconfig: /tmp/.kubeconfig
     definition:
