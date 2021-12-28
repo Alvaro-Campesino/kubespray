@@ -59,35 +59,25 @@
     - inventory_hostname in groups['etcd']
     - etcd_member_id.stdout | length > 0
 
-# Fetch kubeconfig for updating kubeadm-config configmap
-- name: Fetch kubeconfig file
-  copy:
-    src: "{{ ansible_env.HOME | default('/root') }}/.kube/config"
-    dest: /tmp/.kubeconfig
-  delegate_to: "{{ groups['kube_control_plane'] | first }}"
-
-- name: Update kubeconfig file
-  replace:
-    regexp: "://127.0.0.1:"
-    replace: "://{{ hostvars[groups['kube_control_plane']|first]['ip'] | default(hostvars[groups['kube_control_plane']|first]['ansible_default_ipv4']['address']) }}:"
-    path: /tmp/.kubeconfig
-
 # Delete node from kubeadm-config
-- name: Update kubeadm-config configmap removing control-plane no longer existing endpoints
-  vars:
-    kubeadm_config_cm_content: "{{ lookup('kubernetes.core.k8s', kind='ConfigMap', namespace='kube-system', resource_name='kubeadm-config', kubeconfig=/tmp/.kubeconfig) }}"
-  kubernetes.core.k8s:
-    kubeconfig: /tmp/.kubeconfig
-    definition:
-      api_version: v1
-      kind: ConfigMap
-      metadata:
-        name: kubeadm-config-test
-        namespace: default
-      data:
-        ClusterStatus: "{{ kubeadm_config_cm_content.data.ClusterStatus | regex_replace( node |default(kube_node)  + ':\n' + ' *advertiseAddress: ([0-9]{1,3}.){3}[0-9]{1,3}\n' + ' *bindPort: [0-9]{1,5}' , '') }}"
+- name: Fetch kubeadm-config information
+  kube_info:
+    name: kubeadm-config
+    resource: configmap
+    namespace: kube-system
+  register: current_kubeadm_config
 
-- name: Clean fetched kubeconfig-file
+- name: Create kubeadm-config file removing control-plane no longer existing etcd endpoints
+  copy:
+    dest: /tmp/kubeadm-config
+    content: "{{ current_kubeadm_config.k8s_info | regex_replace( node |default(kube_node)  + ':\\\\n' + ' *advertiseAddress: ([0-9]{1,3}.){3}[0-9]{1,3}\\\\n' + ' *bindPort: [0-9]{1,5}' , '') }}"
+
+- name: Update kubeadm-config configmap removing control-plane no longer existing endpoints
+  kube:
+      kubectl: "{{ bin_dir }}/kubectl"
+      file:  /tmp/kubeadm-config
+
+- name: Clean the leftovers of the cm file
   file:
     state: absent
-    path: /tmp/.kubeconfig
+    path: /tmp/kubeadm-config
