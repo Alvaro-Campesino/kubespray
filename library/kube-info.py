@@ -1,6 +1,5 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-import ansible.utils.display
 
 DOCUMENTATION = """
 ---
@@ -54,7 +53,7 @@ options:
       - present handles checking  versus de resource state, it makes the task fail if the state does not match the provided one
       - The check state won't fail even if the resource does not exist.             
 
-    
+
 requirements:
   - kubectl
 author: "Alvaro Campesino (@Alvaro-Campesino)"
@@ -73,7 +72,7 @@ EXAMPLES = """
     name=nginx-cm 
     resource=configmap
     state=present
-  
+
 - name: Get all pods with a label component=kube-apiserver
   kube_info: 
     resource=pod
@@ -115,7 +114,7 @@ class KubeManager(object):
         self.state = module.params.get('state')
         self.tofile = module.params.get('tofile')
 
-    def _kubeclt_failure(self, rc, out, err):
+    def _kubectl_failure(self, rc, out, err):
         """'Manage errors while running kubectl"""
         self.module.fail_json(
             msg = 'error running kubectl (%s) command (rc=%d), out=\'%s\', err=\'%s\'' % (
@@ -123,21 +122,22 @@ class KubeManager(object):
 
     def execute(self):
         """Execute the kubectl command that will return the k8s_info"""
-        # If resources is not all check resource exists
+        # If resources is not 'all' check resource exists
         if self.resource != all:
             resource_existence = self._check_resource_exists()
             if not resource_existence:
                 return "{}"
         try:
-            #if self.tofile:
-            #    self.base_cmd.append('>')
-            #    self.base_cmd.append(self.tofile)
             rc, out, err = self.module.run_command(self.base_cmd)
             if rc != 0:
-                self._kubeclt_failure(rc, out,err)
+                self._kubectl_failure(rc, out, err)
             if self.tofile:
-                with open(self.tofile, "w") as f:
-                    f.write(out)
+                try:
+                    with open(self.tofile, "w") as f:
+                        f.write(out)
+                except Exception as exc:
+                    self.module.fail_json(
+                        msg = 'error writing information to file %s. %s' % (self.tofile, str(exc)))
         except Exception as exc:
             self.module.fail_json(
                 msg = 'error running kubectl (%s) command: %s' % (' '.join(self.base_cmd), str(exc)))
@@ -157,7 +157,7 @@ class KubeManager(object):
         try:
             rc, out, err = self.module.run_command(resources_cmd)
             if rc != 0:
-                self._kubeclt_failure(rc, out, err)
+                self._kubectl_failure(rc, out, err)
         except Exception as exc:
             self.module.fail_json(
                 msg = 'error running kubectl (%s) command: %s' % (' '.join(self.base_cmd), str(exc)))
