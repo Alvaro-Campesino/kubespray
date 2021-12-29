@@ -62,6 +62,7 @@
 # Delete node from kubeadm-config
 - name: Fetch kubeadm-config information
   kube_info:
+    kubectl: "{{ bin_dir }}/kubectl"
     name: kubeadm-config
     resource: configmap
     namespace: kube-system
