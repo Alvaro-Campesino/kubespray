@@ -124,9 +124,9 @@ class KubeManager(object):
         """Execute the kubectl command that will return the k8s_info"""
         # If resources is not 'all' check resource exists
         if self.resource != all:
-            resource_existence = self._check_resource_exists()
-            if not resource_existence:
-                return "{}"
+            exists, msg = resource_existence = self._check_resource_exists()
+            if not exists:
+                return "{}", msg
         try:
             rc, out, err = self.module.run_command(self.base_cmd)
             if rc != 0:
@@ -143,13 +143,13 @@ class KubeManager(object):
                 msg = 'error running kubectl (%s) command: %s' % (' '.join(self.base_cmd), str(exc)))
         if not out:
             if self.state == "check":
-                Display().warning('There is no %s named %s in the specified namespace.' % (self.resource, self.name))
+                msg = 'There is no %s named %s in the specified namespace. Not failing due to checking mode' % (self.resource, self.name)
             elif self.state == "present":
                 self.module.fail_json(
                     msg = 'There is no %s named %s in the specified namespace.' % (self.resource, self.name)
                 )
             out = {}
-        return out
+        return out, msg
 
     def _check_resource_exists(self):
         """Verify if the resource exists and warn or fail if it does not"""
@@ -174,11 +174,10 @@ class KubeManager(object):
                 msg = 'Error, resource %s does not exist in the k8s cluster' % self.resource
             )
         elif resource not in resources:
-            Display().warning(
-                'resource does not exist, as the state of the play is \'check\' we won\'t fail')
-            return False
+            msg = 'Resource %s does not exist in the k8s cluster, but we are in check mode' % self.resource
+            return False, msg
         else:
-            return True
+            return True, ""
 
 
 def main():
@@ -198,15 +197,15 @@ def main():
     changed = False
 
     manager = KubeManager(module)
-    result = manager.execute()
+    result, msg = manager.execute()
 
     module.exit_json(changed = changed,
-                     k8s_info = json.loads(result)
+                     k8s_info = json.loads(result),
+                     msg = msg
                      )
 
 
 from ansible.module_utils.basic import *  # noqa
-from ansible.utils.display import Display
 
 if __name__ == '__main__':
     main()
