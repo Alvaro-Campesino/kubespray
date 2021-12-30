@@ -124,9 +124,9 @@ class KubeManager(object):
         """Execute the kubectl command that will return the k8s_info"""
         # If resources is not 'all' check resource exists
         if self.resource != all:
-            exists, msg = resource_existence = self._check_resource_exists()
+            exists = self._check_resource_exists()
             if not exists:
-                return "{}", msg
+                return "{}"
         try:
             rc, out, err = self.module.run_command(self.base_cmd)
             if rc != 0:
@@ -142,14 +142,12 @@ class KubeManager(object):
             self.module.fail_json(
                 msg = 'error running kubectl (%s) command: %s' % (' '.join(self.base_cmd), str(exc)))
         if not out:
-            if self.state == "check":
-                msg = 'There is no %s named %s in the specified namespace. Not failing due to checking mode' % (self.resource, self.name)
-            elif self.state == "present":
+            if self.state != "present":
                 self.module.fail_json(
                     msg = 'There is no %s named %s in the specified namespace.' % (self.resource, self.name)
                 )
             out = {}
-        return out, msg
+        return out
 
     def _check_resource_exists(self):
         """Verify if the resource exists and warn or fail if it does not"""
@@ -175,9 +173,9 @@ class KubeManager(object):
             )
         elif resource not in resources:
             msg = 'Resource %s does not exist in the k8s cluster, but we are in check mode' % self.resource
-            return False, msg
+            return False
         else:
-            return True, ""
+            return True
 
 
 def main():
@@ -197,11 +195,10 @@ def main():
     changed = False
 
     manager = KubeManager(module)
-    result, msg = manager.execute()
+    result = manager.execute()
 
     module.exit_json(changed = changed,
-                     k8s_info = json.loads(result),
-                     msg = msg
+                     k8s_info = json.loads(result)
                      )
 
 
